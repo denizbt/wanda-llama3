@@ -15,6 +15,24 @@ class TokenizerWrapper:
     def __init__(self, input_ids):
         self.input_ids = input_ids
 
+
+def _load_c4_split(split, data_file):
+    try:
+        return load_dataset(
+            'allenai/c4',
+            'allenai--c4',
+            data_files={split: data_file},
+            split=split,
+        )
+    except ValueError:
+        # Newer versions of `datasets` expose the C4 English config as `en`.
+        return load_dataset(
+            'allenai/c4',
+            'en',
+            data_files={split: data_file},
+            split=split,
+        )
+
 # Load and process wikitext2 dataset
 def get_wikitext2(nsamples, seed, seqlen, tokenizer):
     # Load train and test datasets
@@ -40,8 +58,8 @@ def get_wikitext2(nsamples, seed, seqlen, tokenizer):
 # Load and process c4 dataset
 def get_c4(nsamples, seed, seqlen, tokenizer):
     # Load train and validation datasets
-    traindata = load_dataset('allenai/c4', 'allenai--c4', data_files={'train': 'en/c4-train.00000-of-01024.json.gz'}, split='train')
-    valdata = load_dataset('allenai/c4', 'allenai--c4', data_files={'validation': 'en/c4-validation.00000-of-00008.json.gz'}, split='validation')
+    traindata = _load_c4_split('train', 'en/c4-train.00000-of-01024.json.gz')
+    valdata = _load_c4_split('validation', 'en/c4-validation.00000-of-00008.json.gz')
 
     # Generate samples from training set
     random.seed(seed)
