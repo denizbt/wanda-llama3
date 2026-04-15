@@ -17,21 +17,13 @@ class TokenizerWrapper:
 
 
 def _load_c4_split(split, data_file):
-    try:
-        return load_dataset(
-            'allenai/c4',
-            'allenai--c4',
-            data_files={split: data_file},
-            split=split,
-        )
-    except ValueError:
-        # Newer versions of `datasets` expose the C4 English config as `en`.
-        return load_dataset(
-            'allenai/c4',
-            'en',
-            data_files={split: data_file},
-            split=split,
-        )
+    return load_dataset(
+        "json",
+        data_files={
+            split: f"https://huggingface.co/datasets/allenai/c4/resolve/main/{data_file}"
+        },
+        split=split,
+    )
 
 # Load and process wikitext2 dataset
 def get_wikitext2(nsamples, seed, seqlen, tokenizer):
@@ -57,9 +49,11 @@ def get_wikitext2(nsamples, seed, seqlen, tokenizer):
 
 # Load and process c4 dataset
 def get_c4(nsamples, seed, seqlen, tokenizer):
-    # Load train and validation datasets
+    # Load the train split used for calibration sampling.
+    # Wanda only consumes these calibration samples, so we intentionally skip
+    # loading the validation split here. This avoids split-verification errors
+    # in newer `datasets` versions when using partial C4 file loading.
     traindata = _load_c4_split('train', 'en/c4-train.00000-of-01024.json.gz')
-    valdata = _load_c4_split('validation', 'en/c4-validation.00000-of-00008.json.gz')
 
     # Generate samples from training set
     random.seed(seed)
@@ -77,11 +71,7 @@ def get_c4(nsamples, seed, seqlen, tokenizer):
         tar[:, :-1] = -100
         trainloader.append((inp, tar))
 
-    # Prepare validation dataset
-    valenc = tokenizer(' '.join(valdata[:1100]['text']), return_tensors='pt')
-    valenc = valenc.input_ids[:, :(256 * seqlen)]
-    valenc = TokenizerWrapper(valenc)
-    return trainloader, valenc
+    return trainloader, None
 
 # Function to select the appropriate loader based on dataset name
 def get_loaders(name, nsamples=128, seed=0, seqlen=2048, tokenizer=None):
