@@ -89,6 +89,31 @@ LLaMA-2 results: (LLaMA-2-34b is not released as of 9.22.2023)
 |2:4| sparsegpt        | **10.17** | 8.32       | 5.40      |
 |2:4| wanda            | 11.02    | **8.27**   | **5.16**     |
 
+### Pruning LLaMA 3, Mistral, and Qwen
+Use `sparsify_llama3_plus.py` for Hugging Face checkpoints that should be saved back in standard HF format. It supports decoder-only Llama, Mistral, and Qwen2/Qwen3 architecture families, including `mistralai/Mistral-7B-v0.3` and `Qwen/Qwen2.5-7B`.
+
+```sh
+python sparsify_llama3_plus.py \
+    --model mistralai/Mistral-7B-v0.3 \
+    --output_dir out/mistral_7b_v03/unstructured/wanda \
+    --prune_method wanda \
+    --sparsity_ratio 0.5 \
+    --sparsity_type unstructured \
+    --seqlen 2048
+```
+
+```sh
+python sparsify_llama3_plus.py \
+    --model Qwen/Qwen2.5-7B \
+    --output_dir out/qwen2_5_7b/unstructured/wanda \
+    --prune_method wanda \
+    --sparsity_ratio 0.5 \
+    --sparsity_type unstructured \
+    --seqlen 2048
+```
+
+If `--model_family` is omitted, the script reads `config.model_type` from the checkpoint. `--seqlen` is optional, but setting it to `2048` matches the common WANDA calibration length and avoids accidentally allocating calibration tensors at the full long-context length of newer checkpoints.
+
 ### Ablation on OBS weight update
 To reproduce the analysis on weight update, we provide our implementation for this ablation. All commands can be found in [this script](scripts/ablate_weight_update.sh).
 ```sh
@@ -128,4 +153,4 @@ This project is released under the MIT license. Please see the [LICENSE](LICENSE
 Feel free to discuss papers/code with us through issues/emails!
 
 mingjies at cs.cmu.edu  
-liuzhuangthu at gmail.com 
+liuzhuangthu at gmail.com

@@ -8,7 +8,6 @@ from transformers import AutoConfig, AutoModelForCausalLM, AutoTokenizer
 
 from lib.eval import eval_ppl
 
-# NEW METHODS FOR US
 from lib.model_utils import (
     get_pruning_device,
     load_model,
@@ -17,7 +16,6 @@ from lib.model_utils import (
     resolve_runtime,
     save_metadata,
 )
-######
 
 from lib.prune import (
     check_sparsity,
@@ -34,12 +32,18 @@ print("accelerate", version("accelerate"))
 print("# of gpus:", torch.cuda.device_count())
 
 
-def validate_hf_checkpoint(output_dir, verify_model_load=False):
-    config = AutoConfig.from_pretrained(output_dir)
-    tokenizer = AutoTokenizer.from_pretrained(output_dir)
+def validate_hf_checkpoint(output_dir, verify_model_load=False, trust_remote_code=False):
+    config = AutoConfig.from_pretrained(output_dir, trust_remote_code=trust_remote_code)
+    tokenizer = AutoTokenizer.from_pretrained(
+        output_dir,
+        trust_remote_code=trust_remote_code,
+    )
 
     if verify_model_load:
-        reloaded_model = AutoModelForCausalLM.from_pretrained(output_dir)
+        reloaded_model = AutoModelForCausalLM.from_pretrained(
+            output_dir,
+            trust_remote_code=trust_remote_code,
+        )
         model_class = type(reloaded_model).__name__
     else:
         model_class = None
@@ -53,13 +57,13 @@ def validate_hf_checkpoint(output_dir, verify_model_load=False):
 
 def parse_args():
     parser = argparse.ArgumentParser(
-        description="Prune and save a Llama-family causal LM checkpoint."
+        description="Prune and save a supported decoder-only causal LM checkpoint."
     )
     parser.add_argument(
         "--model",
         type=str,
         required=True,
-        help="Hugging Face model id i.e. meta-llama/Meta-Llama-3-8B.",
+        help="Hugging Face model id, e.g. meta-llama/Meta-Llama-3-8B, mistralai/Mistral-7B-v0.3, or Qwen/Qwen2.5-7B.",
     )
     parser.add_argument(
         "--output_dir",
@@ -70,12 +74,18 @@ def parse_args():
     parser.add_argument(
         "--model_family",
         type=str,
-        default="llama",
-        choices=["llama", "mistral"],
-        help="Currently only llama is supported",
+        default="auto",
+        choices=["auto", "llama", "mistral", "qwen2", "qwen3"],
+        help="Model architecture family. Auto reads config.model_type.",
     )
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--nsamples", type=int, default=128)
+    parser.add_argument(
+        "--seqlen",
+        type=int,
+        default=None,
+        help="Calibration/eval sequence length. Defaults to the checkpoint config; use 2048 to match common WANDA settings and reduce memory.",
+    )
     parser.add_argument("--sparsity_ratio", type=float, default=0.5)
     parser.add_argument(
         "--sparsity_type",
@@ -99,6 +109,16 @@ def parse_args():
         ],
     )
     parser.add_argument("--cache_dir", type=str, default="llm_weights")
+    parser.add_argument(
+        "--use_fast_tokenizer",
+        action="store_true",
+        help="Prefer the Hugging Face fast tokenizer. If omitted, slow tokenizers are tried first with a fast fallback when needed.",
+    )
+    parser.add_argument(
+        "--trust_remote_code",
+        action="store_true",
+        help="Pass trust_remote_code=True when loading model/tokenizer.",
+    )
     parser.add_argument(
         "--device",
         type=str,
@@ -171,10 +191,17 @@ def main():
         args.cache_dir,
         dtype=runtime_dtype,
         device=runtime_device,
+        seqlen=args.seqlen,
+        trust_remote_code=args.trust_remote_code,
     )
     model.eval()
     resolved_family = resolve_model_family(model, args.model_family)
-    tokenizer = load_tokenizer(args.model, args.cache_dir)
+    tokenizer = load_tokenizer(
+        args.model,
+        args.cache_dir,
+        use_fast=args.use_fast_tokenizer,
+        trust_remote_code=args.trust_remote_code,
+    )
 
     device = get_pruning_device(model, args.model, runtime_device=runtime_device)
     print("use device", device)
@@ -201,6 +228,7 @@ def main():
     hf_validation = validate_hf_checkpoint(
         args.output_dir,
         verify_model_load=args.verify_hf_load,
+        trust_remote_code=args.trust_remote_code,
     )
     print(
         "validated Hugging Face checkpoint:",
@@ -219,8 +247,11 @@ def main():
         "nsamples": args.nsamples,
         "seed": args.seed,
         "cache_dir": args.cache_dir,
+        "seqlen": model.seqlen,
         "device": str(device),
         "dtype": str(runtime_dtype),
+        "trust_remote_code": args.trust_remote_code,
+        "use_fast_tokenizer": args.use_fast_tokenizer,
         "use_variant": args.use_variant,
         "eval_ppl": ppl_test,
         "hf_validation": hf_validation,

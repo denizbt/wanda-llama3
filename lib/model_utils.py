@@ -5,7 +5,7 @@ import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 
-SUPPORTED_MODEL_FAMILIES = {"llama"}
+SUPPORTED_MODEL_FAMILIES = {"llama", "mistral", "qwen2", "qwen3"}
 
 
 def resolve_runtime(device="auto", dtype="auto"):
@@ -38,15 +38,34 @@ def resolve_model_family(model, requested_family="auto"):
 
     raise NotImplementedError(
         f"Model family '{family or 'unknown'}' is not supported yet. "
-        "This script currently supports Llama-family checkpoints (including Llama 3). "
-        "Add the new family here before wiring in architecture-specific handling."
+        "This script currently supports Llama, Mistral, and Qwen decoder-only checkpoints."
     )
 
 
-def load_model(model_name, cache_dir="llm_weights", dtype=torch.float16, device="cuda"):
+def get_model_seqlen(model, requested_seqlen=None):
+    if requested_seqlen is not None:
+        return requested_seqlen
+
+    for attr in ("max_position_embeddings", "n_positions", "seq_length"):
+        seqlen = getattr(model.config, attr, None)
+        if seqlen is not None:
+            return seqlen
+
+    return 2048
+
+
+def load_model(
+    model_name,
+    cache_dir="llm_weights",
+    dtype=torch.float16,
+    device="cuda",
+    seqlen=None,
+    trust_remote_code=False,
+):
     load_kwargs = {
         "cache_dir": cache_dir,
         "low_cpu_mem_usage": True,
+        "trust_remote_code": trust_remote_code,
     }
     if device == "cuda":
         load_kwargs["device_map"] = "auto"
@@ -70,16 +89,29 @@ def load_model(model_name, cache_dir="llm_weights", dtype=torch.float16, device=
 
     if device in {"cpu", "mps"}:
         model.to(device)
-    model.seqlen = model.config.max_position_embeddings
+    model.seqlen = get_model_seqlen(model, seqlen)
     return model
 
 
-def load_tokenizer(model_name, cache_dir="llm_weights"):
-    tokenizer = AutoTokenizer.from_pretrained(
-        model_name,
-        cache_dir=cache_dir,
-        use_fast=False,
-    )
+def load_tokenizer(
+    model_name,
+    cache_dir="llm_weights",
+    use_fast=False,
+    trust_remote_code=False,
+):
+    tokenizer_kwargs = {
+        "cache_dir": cache_dir,
+        "use_fast": use_fast,
+        "trust_remote_code": trust_remote_code,
+    }
+    try:
+        tokenizer = AutoTokenizer.from_pretrained(model_name, **tokenizer_kwargs)
+    except ValueError:
+        if use_fast:
+            raise
+        tokenizer_kwargs["use_fast"] = True
+        tokenizer = AutoTokenizer.from_pretrained(model_name, **tokenizer_kwargs)
+
     if tokenizer.pad_token is None and tokenizer.eos_token is not None:
         tokenizer.pad_token = tokenizer.eos_token
     return tokenizer
