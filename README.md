@@ -89,8 +89,18 @@ LLaMA-2 results: (LLaMA-2-34b is not released as of 9.22.2023)
 |2:4| sparsegpt        | **10.17** | 8.32       | 5.40      |
 |2:4| wanda            | 11.02    | **8.27**   | **5.16**     |
 
-### Pruning LLaMA 3, Mistral, and Qwen
-Use `sparsify_llama3_plus.py` for Hugging Face checkpoints that should be saved back in standard HF format. It supports decoder-only Llama, Mistral, and Qwen2/Qwen3 architecture families, including `mistralai/Mistral-7B-v0.3` and `Qwen/Qwen2.5-7B`.
+### Pruning LLaMA 3, Mistral, Qwen, and GPT-2
+Use `sparsify_llama3_plus.py` for Hugging Face checkpoints that should be saved back in standard HF format. It supports decoder-only Llama, Mistral, Qwen2/Qwen3, and GPT-2 architecture families, including `mistralai/Mistral-7B-v0.3`, `Qwen/Qwen2.5-7B`, and `openai-community/gpt2`.
+
+```sh
+python sparsify_llama3_plus.py \
+    --model meta-llama/Meta-Llama-3-8B \
+    --output_dir out/llama3_8b/unstructured/wanda \
+    --prune_method wanda \
+    --sparsity_ratio 0.5 \
+    --sparsity_type unstructured \
+    --seqlen 2048
+```
 
 ```sh
 python sparsify_llama3_plus.py \
@@ -113,6 +123,20 @@ python sparsify_llama3_plus.py \
 ```
 
 If `--model_family` is omitted, the script reads `config.model_type` from the checkpoint. `--seqlen` is optional, but setting it to `2048` matches the common WANDA calibration length and avoids accidentally allocating calibration tensors at the full long-context length of newer checkpoints.
+
+GPT-2 uses Hugging Face `Conv1D` projections whose stored weights are transposed relative to `torch.nn.Linear`. The pruning path converts them to the paper's output-by-input orientation before applying the unchanged WANDA metric and per-output pruning rule. GPT-2 Small has a maximum context length of 1024, so omit `--seqlen` or set it to at most `1024`:
+
+The isolated GPT-2 path currently supports `wanda` and `magnitude`. SparseGPT and the OBS ablation variants remain on the original LLaMA-style path.
+
+```sh
+python sparsify_llama3_plus.py \
+    --model openai-community/gpt2 \
+    --output_dir out/gpt2/unstructured/wanda \
+    --prune_method wanda \
+    --sparsity_ratio 0.5 \
+    --sparsity_type unstructured \
+    --seqlen 1024
+```
 
 ### Ablation on OBS weight update
 To reproduce the analysis on weight update, we provide our implementation for this ablation. All commands can be found in [this script](scripts/ablate_weight_update.sh).

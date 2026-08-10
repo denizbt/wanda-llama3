@@ -24,6 +24,7 @@ from lib.prune import (
     prune_sparsegpt,
     prune_wanda,
 )
+from lib import prune_gpt2
 
 
 print("torch", version("torch"))
@@ -63,7 +64,7 @@ def parse_args():
         "--model",
         type=str,
         required=True,
-        help="Hugging Face model id, e.g. meta-llama/Meta-Llama-3-8B, mistralai/Mistral-7B-v0.3, or Qwen/Qwen2.5-7B.",
+        help="Hugging Face model id, e.g. meta-llama/Meta-Llama-3-8B, mistralai/Mistral-7B-v0.3, Qwen/Qwen2.5-7B, or openai-community/gpt2.",
     )
     parser.add_argument(
         "--output_dir",
@@ -75,7 +76,7 @@ def parse_args():
         "--model_family",
         type=str,
         default="auto",
-        choices=["auto", "llama", "mistral", "qwen2", "qwen3"],
+        choices=["auto", "llama", "mistral", "qwen2", "qwen3", "gpt2"],
         help="Model architecture family. Auto reads config.model_type.",
     )
     parser.add_argument("--seed", type=int, default=0)
@@ -161,11 +162,25 @@ def get_pruning_pattern(args):
     return prune_n, prune_m
 
 
-def run_pruning(args, model, tokenizer, device, prune_n, prune_m):
+def run_pruning(args, model, tokenizer, device, prune_n, prune_m, model_family):
     if args.sparsity_ratio == 0:
         return
 
     print("pruning starts")
+    if model_family == "gpt2":
+        if args.prune_method == "wanda":
+            prune_gpt2.prune_wanda(
+                args, model, tokenizer, device, prune_n=prune_n, prune_m=prune_m
+            )
+        elif args.prune_method == "magnitude":
+            prune_gpt2.prune_magnitude(
+                args, model, tokenizer, device, prune_n=prune_n, prune_m=prune_m
+            )
+        else:
+            raise NotImplementedError(
+                "GPT-2 currently supports the faithful Wanda and magnitude pruning paths."
+            )
+        return
     if args.prune_method == "wanda":
         prune_wanda(args, model, tokenizer, device, prune_n=prune_n, prune_m=prune_m)
     elif args.prune_method == "magnitude":
@@ -195,7 +210,12 @@ def main():
         trust_remote_code=args.trust_remote_code,
     )
     model.eval()
-    resolved_family = resolve_model_family(model, args.model_family)
+    detected_family = getattr(model.config, "model_type", "").lower()
+    requested_family = args.model_family.lower()
+    if requested_family == "gpt2" or (requested_family == "auto" and detected_family == "gpt2"):
+        resolved_family = "gpt2"
+    else:
+        resolved_family = resolve_model_family(model, args.model_family)
     tokenizer = load_tokenizer(
         args.model,
         args.cache_dir,
@@ -203,13 +223,19 @@ def main():
         trust_remote_code=args.trust_remote_code,
     )
 
-    device = get_pruning_device(model, args.model, runtime_device=runtime_device)
+    if resolved_family == "gpt2":
+        device = prune_gpt2.get_pruning_device(model, runtime_device=runtime_device)
+    else:
+        device = get_pruning_device(model, args.model, runtime_device=runtime_device)
     print("use device", device)
 
-    run_pruning(args, model, tokenizer, device, prune_n, prune_m)
+    run_pruning(args, model, tokenizer, device, prune_n, prune_m, resolved_family)
 
     print("*" * 30)
-    sparsity_ratio = check_sparsity(model)
+    if resolved_family == "gpt2":
+        sparsity_ratio = prune_gpt2.check_sparsity(model)
+    else:
+        sparsity_ratio = check_sparsity(model)
     print(f"sparsity sanity check {sparsity_ratio:.4f}")
     print("*" * 30)
 
