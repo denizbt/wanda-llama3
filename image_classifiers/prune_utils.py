@@ -26,7 +26,7 @@ def check_sparsity(model):
 
 def compute_mask(W_metric, prune_granularity, sparsity):
     if prune_granularity == "layer":
-        thres = torch.sort(W_metric.flatten().cuda())[0][int(W_metric.numel() * sparsity)].cpu()
+        thres = torch.sort(W_metric.flatten())[0][int(W_metric.numel() * sparsity)]
         W_mask = (W_metric <= thres)
         return W_mask 
     elif prune_granularity == "row":

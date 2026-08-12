@@ -1,3 +1,95 @@
+# Model Support Expansion
+
+This repository adapts the original Wanda codebase to support additional model architectures (Qwen, Mistral etc). We are not the authors of the original project; we have edited the original README to explain how to use our additional code.
+
+## Quick start: ViT and newer Hugging Face LLMs
+
+Install the dependencies first:
+
+```sh
+pip install -r requirements.txt
+```
+
+### LLaMA 3, Mistral, Qwen, or GPT-2
+
+Run the newer Hugging Face pruning entry point from the repository root. For example:
+
+```sh
+python sparsify_llama3_plus.py \
+    --model meta-llama/Meta-Llama-3-8B \
+    --output_dir out/llama3_8b/unstructured/wanda \
+    --prune_method wanda \
+    --sparsity_ratio 0.5 \
+    --sparsity_type unstructured \
+    --seqlen 2048
+```
+
+The model repository must be accessible to the logged-in Hugging Face account. More model-family examples are included under "Pruning LLaMA 3, Mistral, Qwen, and GPT-2" below.
+
+### ViT on ImageNet
+
+Accept the access conditions for [ImageNet-1k on Hugging Face](https://huggingface.co/datasets/ILSVRC/imagenet-1k), authenticate with `hf auth login`, and run:
+
+```sh
+bash image_classifiers/download_for_vit.sh
+```
+
+The script only prepares the inputs: it downloads the compatible ViT-B/16 checkpoint and exports the labeled ImageNet-1k training and validation splits into torchvision `ImageFolder` directories. Dataset preparation is automatic and resumable, but ImageNet is large and requires about 170 GiB of free disk space. Set `IMAGENET_DIR` or `WEIGHTS_DIR` to override the default locations. Set `PYTHON_BIN` if the required packages are installed in a non-default Python environment.
+
+After preparation, run pruning and evaluation as a separate step:
+
+```sh
+cd image_classifiers
+python main.py \
+    --model vit_base \
+    --data_path data/imagenet-1k \
+    --resume model_weights/vit/jx_vit_base_p16_224-80ecf9dd.pth \
+    --prune_metric wanda \
+    --prune_granularity row \
+    --sparsity 0.5 \
+    --save_path output/vit_base_wanda/vit_base_wanda_50.pth
+```
+
+Note that Appendix A of the WANDA paper finds that per-output pruning (i.e. prune granularity = row) works better for vision models than per-layer.
+
+To prepare a small diagnostic subset before downloading the full dataset, set the number of images to retain from each split:
+
+```sh
+DIAGNOSTIC_EXAMPLES=2 \
+PYTHON_BIN=/path/to/python \
+bash image_classifiers/download_for_vit.sh
+```
+
+Then run the diagnostic pruning and evaluation separately:
+
+```sh
+cd image_classifiers
+python main.py \
+    --model vit_base \
+    --device cpu \
+    --batch_size 2 \
+    --num_workers 0 \
+    --nsamples 2 \
+    --data_path data/imagenet-1k \
+    --resume model_weights/vit/jx_vit_base_p16_224-80ecf9dd.pth \
+    --prune_metric wanda \
+    --prune_granularity row \
+    --sparsity 0.5 \
+    --save_path output/vit_base_wanda/vit_base_wanda_50.pth
+```
+
+Diagnostic preparation skips the full-dataset disk-space check and reuses an already-exported subset. Its accuracy is not meaningful; it is intended only to verify execution.
+
+#### ViT checkpoint details
+
+The script downloads `jx_vit_base_p16_224-80ecf9dd.pth`, a PyTorch state-dictionary checkpoint for ViT-B/16: a base-size Vision Transformer using 16-by-16 image patches at 224-by-224 resolution. It contains the pretrained and ImageNet-1k-fine-tuned tensors in the timm parameter layout expected by `image_classifiers/models/vision_transformer.py` and the `--resume` loader.
+
+This checkpoint represents the same model weights as [`google/vit-base-patch16-224`](https://huggingface.co/google/vit-base-patch16-224). The Hugging Face model card explains that its weights were converted from the timm checkpoint. The original code in WANDA repository expects the ".pth" format which is what we use here.
+
+---
+
+## README
+
 # Pruning LLMs by Weights and Activations
 Official PyTorch implementation of **Wanda** (Pruning by **W**eights **and a**ctivations), as presented in our paper:
 

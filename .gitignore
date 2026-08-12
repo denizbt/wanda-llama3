@@ -4,4 +4,6 @@
 *.DS_Store
 venv/
 out/
+output/
 llm_weights/
+image_classifiers/model_weights/*

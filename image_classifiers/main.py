@@ -222,6 +222,8 @@ def get_args_parser():
     parser.add_argument("--prune_metric", type=str, choices=["magnitude", "wanda"])
     parser.add_argument("--prune_granularity", type=str)
     parser.add_argument("--blocksize", type=int, default=1)
+    parser.add_argument("--save_path", type=str, default="",
+                        help="path to save the pruned model state dict")
 
     return parser
 
@@ -286,7 +288,7 @@ def main(args):
         data_loader_val = None
 
     model = utils.build_model(args, pretrained=False)
-    model.cuda()
+    model.to(device)
     if args.distributed:
         model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[args.gpu], find_unused_parameters=False)
         model_without_ddp = model.module
@@ -334,6 +336,12 @@ def main(args):
 
     actual_sparsity = check_sparsity(model)
     print(f"actual sparsity {actual_sparsity}")
+
+    if args.save_path:
+        Path(args.save_path).parent.mkdir(parents=True, exist_ok=True)
+        model_to_save = model.module if hasattr(model, "module") else model
+        torch.save(model_to_save.state_dict(), args.save_path)
+        print(f"Pruned model saved to {args.save_path}")
 
     print(f"Eval only mode")
     test_stats = evaluate(data_loader_val, model, device, use_amp=args.use_amp)
