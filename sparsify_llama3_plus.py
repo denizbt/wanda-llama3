@@ -64,7 +64,7 @@ def parse_args():
         "--model",
         type=str,
         required=True,
-        help="Hugging Face model id, e.g. meta-llama/Meta-Llama-3-8B, mistralai/Mistral-7B-v0.3, Qwen/Qwen2.5-7B, or openai-community/gpt2.",
+        help="Hugging Face model id, e.g. meta-llama/Meta-Llama-3-8B, mistralai/Mistral-7B-v0.3, Qwen/Qwen2.5-7B, Qwen/Qwen3-8B-Base, or openai-community/gpt2.",
     )
     parser.add_argument(
         "--output_dir",

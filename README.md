@@ -182,7 +182,7 @@ LLaMA-2 results: (LLaMA-2-34b is not released as of 9.22.2023)
 |2:4| wanda            | 11.02    | **8.27**   | **5.16**     |
 
 ### Pruning LLaMA 3, Mistral, Qwen, and GPT-2
-Use `sparsify_llama3_plus.py` for Hugging Face checkpoints that should be saved back in standard HF format. It supports decoder-only Llama, Mistral, Qwen2/Qwen3, and GPT-2 architecture families, including `mistralai/Mistral-7B-v0.3`, `Qwen/Qwen2.5-7B`, and `openai-community/gpt2`.
+Use `sparsify_llama3_plus.py` for Hugging Face checkpoints that should be saved back in standard HF format. It supports decoder-only Llama, Mistral, Qwen2/Qwen3, and GPT-2 architecture families, including `mistralai/Mistral-7B-v0.3`, `Qwen/Qwen2.5-7B`, `Qwen/Qwen3-8B-Base`, and `openai-community/gpt2`.
 
 ```sh
 python sparsify_llama3_plus.py \
@@ -208,6 +208,16 @@ python sparsify_llama3_plus.py \
 python sparsify_llama3_plus.py \
     --model Qwen/Qwen2.5-7B \
     --output_dir out/qwen2_5_7b/unstructured/wanda \
+    --prune_method wanda \
+    --sparsity_ratio 0.5 \
+    --sparsity_type unstructured \
+    --seqlen 2048
+```
+
+```sh
+python sparsify_llama3_plus.py \
+    --model Qwen/Qwen3-8B-Base \
+    --output_dir out/qwen3_8b_base/unstructured/wanda \
     --prune_method wanda \
     --sparsity_ratio 0.5 \
     --sparsity_type unstructured \
